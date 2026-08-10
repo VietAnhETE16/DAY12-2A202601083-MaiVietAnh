@@ -94,7 +94,11 @@ phút đồng hồ (reset lúc giây 00), một người dùng có thể gửi t
 request trong 2 giây liên tiếp khi hạn mức là 10/phút? Giải thích cách đạt được
 con số đó.
 
-> *Câu trả lời của bạn*
+> - **Số lượng request tối đa:** **20 requests**.
+> - **Giải thích cách đạt được:**
+>   1. Tại giây `10:00:59` (cuối phút thứ nhất), người dùng gửi dồn **10 requests** (hợp lệ trong hạn mức 10 req/phút của phút 10:00).
+>   2. Đến giây `10:01:00` (đầu phút tiếp theo), bộ đếm phút tự động reset về 0. Người dùng lập tức gửi tiếp **10 requests** nữa (hợp lệ trong hạn mức của phút 10:01).
+>   => Kết quả: Trong 2 giây liên tiếp (`10:00:59` - `10:01:00`), server phải chịu tải **20 requests** gấp đôi hạn mức cho phép (vấn đề burst traffic ở ranh giới cửa sổ cố định).
 
 ---
 
@@ -103,7 +107,12 @@ con số đó.
 Hai cơ chế này khác nhau ở điểm nào? Cho một tình huống mà rate limit cho qua
 nhưng cost guard phải chặn, và một tình huống ngược lại.
 
-> *Câu trả lời của bạn*
+> - **Khác biệt cốt lõi:**
+>   + **Rate limit**: Giới hạn **số lượng requests** theo thời gian ngắn (ví dụ: 10 req/phút) để bảo vệ server khỏi bị quá tải hoặc spam.
+>   + **Cost guard**: Giới hạn **tổng chi phí / lượng token LLM tiêu thụ** theo chu kỳ dài (ví dụ: tối đa $10/tháng) để tránh rủi ro tài chính.
+> - **Tình huống Rate limit cho qua nhưng Cost guard chặn:** User mới gửi 1 request đầu tiên trong ngày (hoàn toàn thỏa mãn < 10 req/phút), nhưng gửi kèm prompt/context dài 100k token tiêu tốn $0.5 trong khi ngân sách tháng của user chỉ còn $0.1 => Cost guard chặn với lỗi `402 Payment Required`.
+> - **Tình huống Cost guard cho qua nhưng Rate limit chặn:** User còn nguyên ngân sách tháng $10 (chưa tiêu đồng nào), nhưng bấm gửi liên tục 12 request ngắn ("hi", "alo") trong 5 giây => Rate limit chặn từ request thứ 11 với lỗi `429 Too Many Requests`.
+
 
 ---
 
@@ -112,7 +121,12 @@ nhưng cost guard phải chặn, và một tình huống ngược lại.
 Nếu gộp hai endpoint làm một và cho nó kiểm tra Redis, chuyện gì xảy ra với cụm
 3 container khi Redis mất kết nối 30 giây? Trả lời theo đúng thứ tự sự kiện.
 
-> *Câu trả lời của bạn*
+> Thứ tự sự kiện xảy ra:
+> 1. **Redis mất kết nối tạm thời** trong 30 giây.
+> 2. Endpoint kiểm tra sức khỏe phụ thuộc Redis trả về lỗi `503 Service Unavailable`.
+> 3. Orchestrator (K8s, Docker Swarm, Cloud Platform) hiểu nhầm rằng tiến trình app bị treo/chết nên lập tức **kill và restart đồng loạt cả 3 container agent**.
+> 4. Cả 3 container vừa khởi động lại vẫn thấy Redis chưa online -> tiếp tục báo lỗi và bị restart vòng lặp liên tục (hiện tượng **CrashLoopBackOff / restart storm**). Mọi request đang xử lý dở bị cắt ngang, tài nguyên máy chủ bị nghẽn do liên tục khởi tạo tiến trình mới.
+> 5. **Ý nghĩa của việc tách riêng:** `/health` (Liveness) chỉ kiểm tra process app còn chạy không để restart; còn `/ready` (Readiness) kiểm tra Redis để Load Balancer chỉ tạm thời ngưng đẩy traffic vào cho đến khi Redis hồi phục mà không hề restart container.
 
 ---
 
@@ -122,7 +136,9 @@ Chạy `docker compose up --scale agent=3` rồi gọi `/ask` nhiều lần vớ
 `X-User-Id`. Quan sát `history_length` trong response. Nếu lịch sử được lưu
 trong một dict Python thay vì Redis, bạn sẽ thấy con số đó thay đổi thế nào?
 
-> *Câu trả lời của bạn*
+> - **Sự thay đổi của `history_length` nếu lưu trong dict Python (in-memory):** Con số sẽ nhảy bất thường và không tăng đều (ví dụ: request 1 thấy `0`, request 2 vào container khác lại thấy `0`, request 3 lại thấy `0`, request 4 quay lại container 1 mới thấy `2`...). User sẽ thấy agent liên tục bị "mất trí nhớ" tùy thuộc request rơi vào container nào.
+> - **Khi dùng Redis (Stateless App):** Cả 3 container đều truy xuất chung một nguồn dữ liệu tại Redis. Dù Load Balancer chia request vào bất cứ container nào, `history_length` vẫn tăng đều đặn tuyến tính: 0 ➔ 2 ➔ 4 ➔ 6..., đảm bảo trải nghiệm liền mạch cho người dùng.
+
 
 ---
 
