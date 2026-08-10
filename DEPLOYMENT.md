@@ -10,9 +10,9 @@
 
 | Mục | Nội dung |
 |-----|----------|
-| Họ và tên | (điền họ tên) |
-| Mã học viên | (điền mã học viên) |
-| Repo | (điền link repo DAY12-...) |
+| Họ và tên | Mai Việt Anh |
+| Mã học viên | 2A202601083 |
+| Repo | https://github.com/VietAnhETE16/Day12-2A202601083-MaiVietAnh |
 
 ## Service
 

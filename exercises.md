@@ -148,4 +148,7 @@ Ghi lại **một** lỗi bạn gặp khi deploy lên cloud (build fail, health 
 timeout, sai REDIS_URL, app không đọc `$PORT`...): thông báo lỗi là gì, bạn
 tìm ra nguyên nhân bằng cách nào, và sửa ra sao?
 
-> *Câu trả lời của bạn*
+> - **Lỗi thường gặp:** Khi deploy lên cloud, endpoint `/ready` trả về lỗi `503 Service Unavailable` hoặc container báo lỗi `ConnectionRefusedError: connecting to localhost:6379`.
+> - **Nguyên nhân:** Trên máy local, Redis chạy ở `localhost:6379`, nhưng trên môi trường Cloud (như Render/Railway), Web Service và Redis là hai instance/container tách biệt. Nếu không cấu hình biến môi trường `REDIS_URL` trỏ đến Redis Service của Cloud thì app sẽ cố kết nối vào `localhost` nội bộ của chính nó và thất bại.
+> - **Cách sửa:** Sử dụng cấu hình `render.yaml` tự động inject connection string qua `fromService: day12-redis` (hoặc vào Dashboard ➔ Environment Variables, gán biến `REDIS_URL` bằng đường dẫn Redis do Cloud cấp).
+
