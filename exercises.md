@@ -6,7 +6,7 @@
 > Cách trả lời: thay dòng `> *Câu trả lời của bạn*` bằng câu trả lời.
 > `grade.py` đếm số câu đã trả lời (15 điểm cho 10 câu).
 >
-> Họ và tên: ..........................  Mã học viên: ..........................
+> Họ và tên: Mai Việt Anh  Mã học viên: 2A202601083
 
 ---
 
@@ -16,7 +16,9 @@ Trong `Settings`, `agent_api_key` không có giá trị mặc định nên app c
 khi khởi động nếu thiếu biến môi trường. Hãy mô tả một tình huống cụ thể mà
 việc "chết sớm" này cứu bạn, so với việc để mặc định `"changeme"`.
 
-> *Câu trả lời của bạn*
+> Tình huống: Khi deploy service lên production (Render/Railway), dev quên thêm biến môi trường `AGENT_API_KEY` vào dashboard.
+> - Nếu có mặc định là `"changeme"`, app vẫn khởi động bình thường. Kẻ xấu có thể đoán được key mặc định `"changeme"` và gọi API thoải mái, làm cạn kiệt ngân sách hoặc lộ tài nguyên LLM mà dev không hề hay biết cho đến khi nhận hóa đơn.
+> - Việc "chết sớm" (fail fast): App sẽ văng lỗi `ValidationError` ngay lúc khởi động, quá trình deploy báo đỏ lập tức. Dev phát hiện và bổ sung biến môi trường ngay trước khi mở traffic cho người dùng.
 
 ---
 
@@ -26,7 +28,13 @@ Chạy service và gọi `/ask` vài lần. Dán một dòng log JSON bạn thu 
 nêu **hai** việc bạn làm được với dòng log đó mà `print("đã trả lời xong")`
 không làm được.
 
-> *Câu trả lời của bạn*
+> Dòng log JSON thu được:
+> `{"event": "ask_completed", "level": "info", "timestamp": "2026-08-10T02:50:00.000000+00:00", "user_id": "sv01", "tokens_in": 12, "tokens_out": 25, "cost_usd": 0.00015}`
+>
+> Hai việc làm được với log JSON mà `print()` không làm được:
+> 1. **Lọc, truy vấn và thống kê tự động qua Log Aggregator (Datadog, Loki, CloudWatch):** Hệ thống có thể parse trường JSON để tính tổng `cost_usd` theo từng `user_id` hoặc tính trung bình token sử dụng trong ngày.
+> 2. **Tạo cảnh báo (Alerting) tự động:** Có thể đặt rule tự động kích hoạt cảnh báo nếu `cost_usd` vượt ngưỡng hoặc `level == "error"` tăng đột biến.
+
 
 ---
 
