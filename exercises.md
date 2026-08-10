@@ -50,12 +50,14 @@ docker images | grep agent
 
 | Bản | Dung lượng |
 |-----|-----------|
-| 1 stage (bản đầu) | ... MB |
-| Multi-stage | ... MB |
+| 1 stage (bản đầu) | ~1050 MB |
+| Multi-stage | ~482 MB |
 
 Giải thích: phần dung lượng chênh lệch đó là những gì?
 
-> *Câu trả lời của bạn*
+> Phần dung lượng chênh lệch (~568 MB) gồm:
+> 1. **Base image & Build tools:** Bản gốc dùng `python:3.11` chứa đầy đủ bộ công cụ biên dịch (`gcc`, `g++`, `make`, build headers, thư viện hệ thống thừa), trong khi `python:3.11-slim` đã loại bỏ các package này.
+> 2. **Rác phát sinh khi build:** Trong multi-stage build, toàn bộ cache tải về của pip, file tạm thời khi compile dependencies chỉ nằm lại ở stage `builder` và bị huỷ bỏ, stage `runtime` chỉ copy phần kết quả cài đặt sạch sang `/usr/local`.
 
 ---
 
@@ -65,7 +67,8 @@ Sửa một ký tự trong `app/main.py` rồi build lại. Với Dockerfile c�
 layer nào được dùng lại từ cache, layer nào phải chạy lại? Nếu bạn đặt
 `COPY . .` lên trước `RUN pip install` thì kết quả khác thế nào?
 
-> *Câu trả lời của bạn*
+> - **Với Dockerfile hiện tại:** Các layer `COPY requirements.txt .`, `RUN pip install ...`, `COPY --from=builder /install /usr/local`, và `RUN useradd ...` đều được **dùng lại từ cache** (vì `requirements.txt` không đổi). Chỉ layer `COPY app ./app` và các bước sau đó (`chown`, `HEALTHCHECK`, `CMD`) mới phải chạy lại.
+> - **Nếu đặt `COPY . .` trước `RUN pip install`:** Mỗi khi sửa 1 dòng code trong `app/main.py`, cache của layer `COPY . .` bị mất hiệu lực, kéo theo lệnh `RUN pip install` phải tải và cài lại toàn bộ thư viện từ đầu, làm tăng thời gian build từ vài giây lên vài phút.
 
 ---
 
@@ -75,7 +78,12 @@ Container mặc định chạy bằng root. Mô tả chuỗi sự kiện dẫn t
 trong code Python của bạn" tới "kẻ tấn công có quyền cao trên máy host", và
 lệnh `USER` cắt đứt chuỗi đó ở chỗ nào.
 
-> *Câu trả lời của bạn*
+> - **Chuỗi sự kiện:**
+>   1. Code Python có lỗ hổng (ví dụ Command Injection, Remote Code Execution qua thư viện bên thứ 3).
+>   2. Kẻ tấn công gửi payload khai thác thành công và thực thi shell/code độc hại. Do container chạy dưới quyền `root` (UID 0), kẻ tấn công sở hữu toàn quyền root trong container.
+>   3. Từ quyền root trong container, kẻ tấn công tận dụng các lỗ hổng nhân Linux / Container Escape (hoặc quyền ghi vào mounted socket/volumes) để thoát khỏi container và chiếm quyền `root` trên chính máy host.
+> - **Lệnh `USER` cắt đứt ở chỗ:** Lệnh `USER appuser` ép tiến trình chạy với user thường (UID 10001, không có quyền sudo). Khi bị khai thác mã độc, kẻ tấn công chỉ có quyền hạn tối thiểu, không thể sửa file hệ thống trong container và không có quyền root capabilities để thực hiện container escape lên máy host.
+
 
 ---
 
